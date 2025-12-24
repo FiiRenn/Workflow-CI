@@ -154,8 +154,8 @@ def main():
     print(f"  - min_samples_leaf: {args.min_samples_leaf}")
 
     X_train, X_test, y_train, y_test = load_data(
-        train_path="../creditcard_preprocessing/creditcard_train.csv",
-        test_path="../creditcard_preprocessing/creditcard_test.csv"
+        train_path="../MLProject/creditcard_preprocessing/creditcard_train.csv",
+        test_path="../MLProject/creditcard_preprocessing/creditcard_test.csv"
     )
 
     model, run_id = train_model(X_train, X_test, y_train, y_test, args)
