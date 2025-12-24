@@ -18,17 +18,28 @@ jobs:
     steps:
     # Step 1: Set up job (automatic)
 
-    # Step 2: Checkout repository
-    - name: Run actions/checkout@v3
+    # Step 2: Checkout repository with LFS
+    - name: Run actions/checkout@v4
       uses: actions/checkout@v4
+      with:
+        lfs: true  # Enable Git LFS
 
-    # Step 3: Set up Python
+    # Step 3: Fetch LFS files
+    - name: Fetch LFS files
+      run: |
+        git lfs pull
+        echo "LFS files fetched"
+        echo "Checking CSV files:"
+        head -3 creditcard_preprocessing/creditcard_train.csv
+        head -3 creditcard_preprocessing/creditcard_test.csv
+
+    # Step 4: Set up Python
     - name: Set up Python 3.12.7
       uses: actions/setup-python@v5
       with:
         python-version: ${{ env.PYTHON_VERSION }}
 
-    # Step 4: Check environment
+    # Step 5: Check environment
     - name: Check Env
       run: |
         echo "Python version:"
@@ -45,20 +56,23 @@ jobs:
         echo ""
         echo "MLProject contents:"
         ls -la MLProject/
+        echo ""
+        echo "CSV file sizes:"
+        ls -lh creditcard_preprocessing/
 
-    # Step 5: Install dependencies
+    # Step 6: Install dependencies
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
         pip install mlflow==2.19.0 pandas numpy scikit-learn joblib
 
-    # Step 6: Run MLflow project
+    # Step 7: Run MLflow project
     - name: Run mlflow project
       run: |
         cd MLProject
         mlflow run . --env-manager=local -P n_estimators=100 -P max_depth=10
 
-    # Step 7: Get latest MLflow run_id
+    # Step 8: Get latest MLflow run_id
     - name: Get latest MLflow run_id
       run: |
         cd MLProject
@@ -71,12 +85,12 @@ jobs:
           exit 1
         fi
 
-    # Step 8: Install Python dependencies for artifact handling
+    # Step 9: Install Python dependencies for artifact handling
     - name: Install Python dependencies
       run: |
         pip install google-api-python-client google-auth-httplib2 google-auth-oauthlib
 
-    # Step 9: Upload artifacts to GitHub
+    # Step 10: Upload artifacts to GitHub
     - name: Upload to GitHub
       uses: actions/upload-artifact@v4
       with:
@@ -87,7 +101,7 @@ jobs:
           MLProject/latest_run_id.txt
         retention-days: 30
 
-    # Step 10: Build Docker Model
+    # Step 11: Build Docker Model
     - name: Build Docker Model
       run: |
         cd MLProject
@@ -106,14 +120,14 @@ jobs:
         # List Docker images
         docker images
 
-    # Step 11: Log in to Docker Hub
+    # Step 12: Log in to Docker Hub
     - name: Log in to Docker Hub
       uses: docker/login-action@v3
       with:
         username: ${{ secrets.DOCKER_USERNAME }}
         password: ${{ secrets.DOCKER_PASSWORD }}
 
-    # Step 12: Tag Docker Image
+    # Step 13: Tag Docker Image
     - name: Tag Docker Image
       run: |
         docker tag ${{ env.DOCKER_IMAGE_NAME }}:latest ${{ secrets.DOCKER_USERNAME }}/${{ env.DOCKER_IMAGE_NAME }}:latest
@@ -121,14 +135,14 @@ jobs:
         echo "Docker images tagged:"
         docker images | grep ${{ env.DOCKER_IMAGE_NAME }}
 
-    # Step 13: Push Docker Image
+    # Step 14: Push Docker Image
     - name: Push Docker Image
       run: |
         docker push ${{ secrets.DOCKER_USERNAME }}/${{ env.DOCKER_IMAGE_NAME }}:latest
         docker push ${{ secrets.DOCKER_USERNAME }}/${{ env.DOCKER_IMAGE_NAME }}:${{ github.sha }}
         echo "Docker images pushed successfully"
 
-    # Step 14: Complete job - Print summary
+    # Step 15: Complete job - Print summary
     - name: Complete job
       run: |
         echo "=========================================="
