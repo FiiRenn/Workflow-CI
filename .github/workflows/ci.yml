@@ -30,8 +30,8 @@ jobs:
         git lfs pull
         echo "LFS files fetched"
         echo "Checking CSV files:"
-        head -3 creditcard_preprocessing/creditcard_train.csv
-        head -3 creditcard_preprocessing/creditcard_test.csv
+        head -3 MLProject/creditcard_preprocessing/creditcard_train.csv
+        head -3 MLProjectcreditcard_preprocessing/creditcard_test.csv
 
     # Step 4: Set up Python
     - name: Set up Python 3.12.7
@@ -58,7 +58,7 @@ jobs:
         ls -la MLProject/
         echo ""
         echo "CSV file sizes:"
-        ls -lh creditcard_preprocessing/
+        ls -lh MLProject/creditcard_preprocessing/
 
     # Step 6: Install dependencies
     - name: Install dependencies
