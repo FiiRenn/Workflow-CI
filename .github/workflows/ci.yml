@@ -1,0 +1,146 @@
+name: CI Pipeline - Train and Deploy Model
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:  # Allow manual trigger
+
+env:
+  DOCKER_IMAGE_NAME: credit-card-fraud-model
+  PYTHON_VERSION: '3.12'
+
+jobs:
+  train-and-deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+    # Step 1: Set up job (automatic)
+    
+    # Step 2: Checkout repository
+    - name: Run actions/checkout@v3
+      uses: actions/checkout@v3
+      
+    # Step 3: Set up Python
+    - name: Set up Python 3.12.7
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+        
+    # Step 4: Check environment
+    - name: Check Env
+      run: |
+        echo "Python version:"
+        python --version
+        echo ""
+        echo "Pip version:"
+        pip --version
+        echo ""
+        echo "Current directory:"
+        pwd
+        echo ""
+        echo "Directory contents:"
+        ls -la
+        echo ""
+        echo "MLProject contents:"
+        ls -la MLProject/
+        
+    # Step 5: Install dependencies
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install mlflow==2.19.0 pandas numpy scikit-learn joblib
+        
+    # Step 6: Run MLflow project
+    - name: Run mlflow project
+      run: |
+        cd MLProject
+        mlflow run . --env-manager=local -P n_estimators=100 -P max_depth=10
+        
+    # Step 7: Get latest MLflow run_id
+    - name: Get latest MLflow run_id
+      run: |
+        cd MLProject
+        if [ -f "latest_run_id.txt" ]; then
+          RUN_ID=$(cat latest_run_id.txt)
+          echo "RUN_ID=$RUN_ID" >> $GITHUB_ENV
+          echo "Latest Run ID: $RUN_ID"
+        else
+          echo "Run ID file not found"
+          exit 1
+        fi
+        
+    # Step 8: Install Python dependencies for artifact handling
+    - name: Install Python dependencies
+      run: |
+        pip install google-api-python-client google-auth-httplib2 google-auth-oauthlib
+        
+    # Step 9: Upload artifacts to GitHub
+    - name: Upload to GitHub
+      uses: actions/upload-artifact@v3
+      with:
+        name: mlflow-artifacts
+        path: |
+          MLProject/mlruns/
+          MLProject/model_output/
+          MLProject/latest_run_id.txt
+        retention-days: 30
+        
+    # Step 10: Build Docker Model
+    - name: Build Docker Model
+      run: |
+        cd MLProject
+        # Find the model path from mlruns
+        MODEL_PATH=$(find mlruns -name "model" -type d | grep -E "artifacts/model$" | head -1)
+        echo "Model path: $MODEL_PATH"
+        
+        if [ -n "$MODEL_PATH" ]; then
+          mlflow models build-docker -m "$MODEL_PATH" -n ${{ env.DOCKER_IMAGE_NAME }}
+          echo "Docker image built successfully"
+        else
+          echo "Model path not found, building from model_output"
+          # Alternative: create a simple Docker image
+          mlflow models build-docker -m "model_output" -n ${{ env.DOCKER_IMAGE_NAME }} || echo "Using alternative method"
+        fi
+        
+        # List Docker images
+        docker images
+        
+    # Step 11: Log in to Docker Hub
+    - name: Log in to Docker Hub
+      uses: docker/login-action@v2
+      with:
+        username: ${{ secrets.DOCKER_USERNAME }}
+        password: ${{ secrets.DOCKER_PASSWORD }}
+        
+    # Step 12: Tag Docker Image
+    - name: Tag Docker Image
+      run: |
+        docker tag ${{ env.DOCKER_IMAGE_NAME }}:latest ${{ secrets.DOCKER_USERNAME }}/${{ env.DOCKER_IMAGE_NAME }}:latest
+        docker tag ${{ env.DOCKER_IMAGE_NAME }}:latest ${{ secrets.DOCKER_USERNAME }}/${{ env.DOCKER_IMAGE_NAME }}:${{ github.sha }}
+        echo "Docker images tagged:"
+        docker images | grep ${{ env.DOCKER_IMAGE_NAME }}
+        
+    # Step 13: Push Docker Image
+    - name: Push Docker Image
+      run: |
+        docker push ${{ secrets.DOCKER_USERNAME }}/${{ env.DOCKER_IMAGE_NAME }}:latest
+        docker push ${{ secrets.DOCKER_USERNAME }}/${{ env.DOCKER_IMAGE_NAME }}:${{ github.sha }}
+        echo "Docker images pushed successfully"
+        
+    # Step 14: Complete job - Print summary
+    - name: Complete job
+      run: |
+        echo "=========================================="
+        echo "CI PIPELINE COMPLETED SUCCESSFULLY"
+        echo "=========================================="
+        echo ""
+        echo "Summary:"
+        echo "  - Model trained with MLflow"
+        echo "  - Artifacts uploaded to GitHub"
+        echo "  - Docker image built and pushed"
+        echo ""
+        echo "Docker Hub: https://hub.docker.com/r/${{ secrets.DOCKER_USERNAME }}/${{ env.DOCKER_IMAGE_NAME }}"
+        echo ""
+        echo "Run ID: ${{ env.RUN_ID }}"
