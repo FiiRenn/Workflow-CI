@@ -31,7 +31,7 @@ jobs:
         echo "LFS files fetched"
         echo "Checking CSV files:"
         head -3 MLProject/creditcard_preprocessing/creditcard_train.csv
-        head -3 MLProjectcreditcard_preprocessing/creditcard_test.csv
+        head -3 MLProject/creditcard_preprocessing/creditcard_test.csv
 
     # Step 4: Set up Python
     - name: Set up Python 3.12.7
