@@ -29,7 +29,8 @@ jobs:
       run: |
         git lfs pull
         echo "LFS files fetched"
-        echo "Checking CSV files:"
+        echo "Checking CSV files in MLProject folder:"
+        # Adjusted path based on your directory change
         head -3 MLProject/creditcard_preprocessing/creditcard_train.csv
         head -3 MLProject/creditcard_preprocessing/creditcard_test.csv
 
@@ -42,22 +43,11 @@ jobs:
     # Step 5: Check environment
     - name: Check Env
       run: |
-        echo "Python version:"
-        python --version
-        echo ""
-        echo "Pip version:"
-        pip --version
-        echo ""
         echo "Current directory:"
         pwd
-        echo ""
-        echo "Directory contents:"
-        ls -la
-        echo ""
-        echo "MLProject contents:"
+        echo "MLProject folder contents:"
         ls -la MLProject/
-        echo ""
-        echo "CSV file sizes:"
+        echo "CSV file check:"
         ls -lh MLProject/creditcard_preprocessing/
 
     # Step 6: Install dependencies
@@ -69,6 +59,7 @@ jobs:
     # Step 7: Run MLflow project
     - name: Run mlflow project
       run: |
+        # Must enter the folder containing MLProject file
         cd MLProject
         mlflow run . --env-manager=local -P n_estimators=100 -P max_depth=10
 
@@ -90,8 +81,11 @@ jobs:
       run: |
         pip install google-api-python-client google-auth-httplib2 google-auth-oauthlib
 
-    # Step 10: Upload artifacts to GitHub
-    - name: Upload to GitHub
+    # ======================================================
+    # CRITERIA SKILLED
+    # Upload Artifacts to GitHub
+    # ======================================================
+    - name: Upload to GitHub (Skilled Criteria)
       uses: actions/upload-artifact@v4
       with:
         name: mlflow-artifacts
@@ -101,59 +95,48 @@ jobs:
           MLProject/latest_run_id.txt
         retention-days: 30
 
-    # Step 11: Build Docker Model
+    # ======================================================
+    # CRITERIA ADVANCED
+    # ======================================================
     - name: Build Docker Model
       run: |
         cd MLProject
         # Find the model path from mlruns
         MODEL_PATH=$(find mlruns -name "model" -type d | grep -E "artifacts/model$" | head -1)
-        echo "Model path: $MODEL_PATH"
+        echo "Model path found: $MODEL_PATH"
         
         if [ -n "$MODEL_PATH" ]; then
           mlflow models build-docker -m "$MODEL_PATH" -n ${{ env.DOCKER_IMAGE_NAME }}
-          echo "Docker image built successfully"
+          echo "Docker image built successfully from MLflow artifact"
         else
-          echo "Model path not found, building from model_output"
-          mlflow models build-docker -m "model_output" -n ${{ env.DOCKER_IMAGE_NAME }} || echo "Using alternative method"
+          echo "MLflow Model path not found, building from fallback model_output"
+          mlflow models build-docker -m "model_output" -n ${{ env.DOCKER_IMAGE_NAME }}
         fi
         
-        # List Docker images
         docker images
 
-    # Step 12: Log in to Docker Hub
     - name: Log in to Docker Hub
       uses: docker/login-action@v3
       with:
         username: ${{ secrets.DOCKER_USERNAME }}
         password: ${{ secrets.DOCKER_PASSWORD }}
 
-    # Step 13: Tag Docker Image
-    - name: Tag Docker Image
+    - name: Tag and Push Docker Image
       run: |
+        # Tagging
         docker tag ${{ env.DOCKER_IMAGE_NAME }}:latest ${{ secrets.DOCKER_USERNAME }}/${{ env.DOCKER_IMAGE_NAME }}:latest
         docker tag ${{ env.DOCKER_IMAGE_NAME }}:latest ${{ secrets.DOCKER_USERNAME }}/${{ env.DOCKER_IMAGE_NAME }}:${{ github.sha }}
-        echo "Docker images tagged:"
-        docker images | grep ${{ env.DOCKER_IMAGE_NAME }}
-
-    # Step 14: Push Docker Image
-    - name: Push Docker Image
-      run: |
+        
+        # Pushing
         docker push ${{ secrets.DOCKER_USERNAME }}/${{ env.DOCKER_IMAGE_NAME }}:latest
         docker push ${{ secrets.DOCKER_USERNAME }}/${{ env.DOCKER_IMAGE_NAME }}:${{ github.sha }}
+        
         echo "Docker images pushed successfully"
 
-    # Step 15: Complete job - Print summary
     - name: Complete job
       run: |
-        echo "=========================================="
-        echo "CI PIPELINE COMPLETED SUCCESSFULLY"
-        echo "=========================================="
-        echo ""
         echo "Summary:"
         echo "  - Model trained with MLflow"
-        echo "  - Artifacts uploaded to GitHub"
-        echo "  - Docker image built and pushed"
-        echo ""
-        echo "Docker Hub: https://hub.docker.com/r/${{ secrets.DOCKER_USERNAME }}/${{ env.DOCKER_IMAGE_NAME }}"
-        echo ""
+        echo "  - Artifacts uploaded to GitHub (Skilled Criteria)"
+        echo "  - Docker image built and pushed (Advanced Criteria)"
         echo "Run ID: ${{ env.RUN_ID }}"
